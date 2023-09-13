@@ -1,10 +1,13 @@
 import datetime
 import glob
 import os
-
+import random
+import numpy as np
+from torchmetrics.classification import MulticlassConfusionMatrix
 import torchvision.transforms.v2
 from tqdm import tqdm
 import torch
+import matplotlib.pyplot as plt
 from torch import nn
 from torch.optim import Adam
 from torch.utils.data import DataLoader
@@ -22,6 +25,11 @@ def main():
     val_every_n_epochs = 5
     max_epochs = 5000
     imgs_info_csv_path = "./dataset/UniformDatasetLabel.csv"
+
+    random_seed = 175801
+    random.seed(random_seed)
+    torch.manual_seed(random_seed)
+    np.random.seed(random_seed)
     
     training_timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     os.mkdir(f"./trained_models/{training_timestamp}")
@@ -72,6 +80,8 @@ def main():
         train_samples = 0
         train_correct = 0
 
+        conf_matrix = MulticlassConfusionMatrix(num_classes=6).cuda()
+
         model.train(True)
         for x, y_true in tqdm(train_dataloader):
             x = img_transforms(x)
@@ -93,13 +103,21 @@ def main():
             train_batches += 1
             train_samples += len(y_true)
 
+            conf_matrix.update(y, y_true)
+
         train_loss = train_running_loss / train_batches
         train_accuracy = train_correct / train_samples
 
         print(f"Epoch {epoch} - train loss: {train_loss} - train accuracy: {train_accuracy}")
 
+        conf_matrix_fig, _ = conf_matrix.plot(labels=["pen", "pencil", "rubber",
+                                                      "ruler", "triangle", "none"])
+
         writer.add_scalar("Loss/train", train_loss, epoch)
         writer.add_scalar("Accuracy/train", train_accuracy, epoch)
+        writer.add_figure("Confusion Matrix/train", conf_matrix_fig, epoch)
+
+        plt.close(conf_matrix_fig)
 
         # VALIDATION PART
 
@@ -108,6 +126,8 @@ def main():
             val_batches = 0
             val_samples = 0
             val_correct = 0
+
+            conf_matrix = MulticlassConfusionMatrix(num_classes=6).cuda()
 
             model.eval()
             with torch.no_grad():
@@ -124,13 +144,21 @@ def main():
                     val_batches += 1
                     val_samples += len(y_true)
 
+                    conf_matrix.update(y, y_true)
+
             val_loss = val_running_loss / val_batches
             val_accuracy = val_correct / val_samples
+
+            conf_matrix_fig, _ = conf_matrix.plot(labels=["pen", "pencil", "rubber",
+                                                          "ruler", "triangle", "none"])
 
             print(f"Epoch {epoch} - val loss: {val_loss} - val accuracy: {val_accuracy}")
 
             writer.add_scalar("Loss/val", val_loss, epoch)
             writer.add_scalar("Accuracy/val", val_accuracy, epoch)
+            writer.add_figure("Confusion Matrix/val", conf_matrix_fig, epoch)
+
+            plt.close(conf_matrix_fig)
 
         # LAST PART - SAVING MODEL AND EPOCH RESULTS
 
