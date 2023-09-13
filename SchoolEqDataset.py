@@ -17,13 +17,11 @@ class SchoolEqDataset(Dataset):
         images = []
         self.labels = []
         for img_path in imgs_paths:
-            #images.append(torchvision.io.read_image(img_path, mode=torchvision.io.ImageReadMode.RGB))
             images.append(torchvision.io.read_image(img_path, mode=torchvision.io.ImageReadMode.GRAY))
             img_path_split = os.path.normpath(img_path).split(os.sep)
             label = labels_dict[img_path_split[-2] + '/' + img_path_split[-1]]
             self.labels.append(label)
         self.labels = torch.Tensor(self.labels).long()
-        #self.inputs = torch.stack(images).float() / 255 * 2 - 1
         self.inputs = torch.stack(images).type(torch.uint8)
 
     def __len__(self):

@@ -75,7 +75,7 @@ def main():
         model.train(True)
         for x, y_true in tqdm(train_dataloader):
             x = img_transforms(x)
-            x = (x.float() / 255).cuda()
+            x = (x.float() / 255).cuda()  # normalizing to 0-1 and moving to GPU
             y_true = y_true.cuda()
             optimizer.zero_grad()
 
