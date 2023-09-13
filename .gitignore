@@ -2,3 +2,4 @@ trained_models/**/*.pt
 venv
 runs
 dataset/**/*.jpg
+dataset/UniformDatasetMean.txt
