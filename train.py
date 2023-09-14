@@ -20,10 +20,10 @@ def main():
     print("Num GPUs Available: ", torch.cuda.device_count())
 
     # Info for the confusion matrix:
-    # num_classes = 3
-    num_classes = 6
-    # class_names = ["WritingTool","Rubber","MeasurementTool"]
-    class_names = ["pen", "pencil", "rubber", "ruler", "triangle", "none"]
+    num_classes = 3
+    # num_classes = 6
+    class_names = ["WritingTool","Rubber","MeasurementTool"]
+    # class_names = ["pen", "pencil", "rubber", "ruler", "triangle", "none"]
 
     # HYPERPARAMS:
 
@@ -76,6 +76,14 @@ def main():
     optimizer = Adam(model.parameters(), lr=learning_rate)
     writer = SummaryWriter()
     loss_function = nn.CrossEntropyLoss(reduction='mean')
+
+    # LOAD WEIGHTS
+    model_weights = torch.load("trained_models/20230914143659/499.pt")
+    # Remove a head if needed:
+    if model_weights['classification_head.1.weight'].shape[0] != num_classes:
+        del model_weights['classification_head.1.weight']
+        del model_weights['classification_head.1.bias']
+    model.load_state_dict(model_weights,strict=False)
 
     # TRAINING LOOP
 
