@@ -4,3 +4,4 @@ runs
 dataset/**/*.jpg
 dataset/UniformDatasetMean.txt
 .idea
+__pycache__/*

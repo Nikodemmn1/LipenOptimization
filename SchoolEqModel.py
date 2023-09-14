@@ -1,8 +1,8 @@
 import torch.nn as nn
 
-
+''' Model for the base 6 or 3 classes  without any fancy things'''
 class SchoolEqModel(nn.Module):
-    def __init__(self):
+    def __init__(self,num_classes):
         super(SchoolEqModel, self).__init__()
         self.feature_extractor = nn.Sequential(
             nn.Conv2d(1, 8, 3),
@@ -35,7 +35,7 @@ class SchoolEqModel(nn.Module):
 
         self.classification_head = nn.Sequential(
             nn.Linear(2048, 100),
-            nn.Linear(100, 6),
+            nn.Linear(100, num_classes),
             nn.Softmax(dim=-1)
         )
 
@@ -43,3 +43,5 @@ class SchoolEqModel(nn.Module):
         x = self.feature_extractor(x)
         x = self.classification_head(x)
         return x
+
+

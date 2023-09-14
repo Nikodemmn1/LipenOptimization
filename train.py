@@ -72,7 +72,7 @@ def main():
 
     # MODEL, OPTIMIZER, LOSS FUNCTION, ETC.
 
-    model = SchoolEqModel().cuda()
+    model = SchoolEqModel(num_classes).cuda()
     optimizer = Adam(model.parameters(), lr=learning_rate)
     writer = SummaryWriter()
     loss_function = nn.CrossEntropyLoss(reduction='mean')
@@ -128,7 +128,7 @@ def main():
 
         # VALIDATION PART
 
-        if epoch % val_every_n_epochs == 0:
+        if epoch % val_every_n_epochs == 0 or epoch == max_epochs - 1:
             val_running_loss = 0
             val_batches = 0
             val_samples = 0
@@ -167,10 +167,10 @@ def main():
 
             plt.close(conf_matrix_fig)
 
-        # LAST PART - SAVING MODEL AND EPOCH RESULTS
+            # LAST PART - SAVING MODEL AND EPOCH RESULTS
 
-        writer.flush()
-        torch.save(model.state_dict(), f'./trained_models/{training_timestamp}/{epoch}.pt')
+            writer.flush()
+            torch.save(model.state_dict(), f'./trained_models/{training_timestamp}/{epoch}.pt')
 
     writer.close()
 
