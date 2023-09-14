@@ -19,12 +19,20 @@ from SchoolEqModel import SchoolEqModel
 def main():
     print("Num GPUs Available: ", torch.cuda.device_count())
 
+    # Info for the confusion matrix:
+    # num_classes = 3
+    num_classes = 6
+    # class_names = ["WritingTool","Rubber","MeasurementTool"]
+    class_names = ["pen", "pencil", "rubber", "ruler", "triangle", "none"]
+
+    # HYPERPARAMS:
+
     learning_rate = 3e-4
     batch_size = 256
     val_batch_size = 256
     val_every_n_epochs = 5
-    max_epochs = 5000
-    imgs_info_csv_path = "./dataset/UniformDatasetLabel.csv"
+    max_epochs = 500
+    imgs_info_csv_path = "./dataset/ReducedDatasetLabel.csv"
 
     random_seed = 175801
     random.seed(random_seed)
@@ -80,7 +88,7 @@ def main():
         train_samples = 0
         train_correct = 0
 
-        conf_matrix = MulticlassConfusionMatrix(num_classes=6).cuda()
+        conf_matrix = MulticlassConfusionMatrix(num_classes=num_classes).cuda()
 
         model.train(True)
         for x, y_true in tqdm(train_dataloader):
@@ -110,8 +118,7 @@ def main():
 
         print(f"Epoch {epoch} - train loss: {train_loss} - train accuracy: {train_accuracy}")
 
-        conf_matrix_fig, _ = conf_matrix.plot(labels=["pen", "pencil", "rubber",
-                                                      "ruler", "triangle", "none"])
+        conf_matrix_fig, _ = conf_matrix.plot(labels=class_names)
 
         writer.add_scalar("Loss/train", train_loss, epoch)
         writer.add_scalar("Accuracy/train", train_accuracy, epoch)
@@ -127,7 +134,7 @@ def main():
             val_samples = 0
             val_correct = 0
 
-            conf_matrix = MulticlassConfusionMatrix(num_classes=6).cuda()
+            conf_matrix = MulticlassConfusionMatrix(num_classes=num_classes).cuda()
 
             model.eval()
             with torch.no_grad():
@@ -144,13 +151,13 @@ def main():
                     val_batches += 1
                     val_samples += len(y_true)
 
+                    print(y.shape)
                     conf_matrix.update(y, y_true)
 
             val_loss = val_running_loss / val_batches
             val_accuracy = val_correct / val_samples
 
-            conf_matrix_fig, _ = conf_matrix.plot(labels=["pen", "pencil", "rubber",
-                                                          "ruler", "triangle", "none"])
+            conf_matrix_fig, _ = conf_matrix.plot(labels=class_names)
 
             print(f"Epoch {epoch} - val loss: {val_loss} - val accuracy: {val_accuracy}")
 
