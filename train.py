@@ -85,6 +85,10 @@ def main():
         del model_weights['classification_head.1.bias']
     model.load_state_dict(model_weights,strict=False)
 
+    # Model saving variables:
+    best_model = None
+    last_model = None
+
     # TRAINING LOOP
 
     for epoch in range(0, max_epochs):
@@ -159,7 +163,6 @@ def main():
                     val_batches += 1
                     val_samples += len(y_true)
 
-                    print(y.shape)
                     conf_matrix.update(y, y_true)
 
             val_loss = val_running_loss / val_batches
@@ -174,11 +177,32 @@ def main():
             writer.add_figure("Confusion Matrix/val", conf_matrix_fig, epoch)
 
             plt.close(conf_matrix_fig)
+            writer.flush()
 
             # LAST PART - SAVING MODEL AND EPOCH RESULTS
+            # Save a new best checkpoint:
+            if best_model is None or best_model[1] < val_accuracy:
+                best_path = f'./trained_models/{training_timestamp}/best_{epoch}.pt'
+                torch.save(model.state_dict(), best_path)
+                # Remove last best checkpoint:
+                if best_model is not None:
+                    try:
+                        os.remove(best_model[0])
+                    except:
+                        print("Error Removing second best model")
+                # Save new best info:
+                best_model = (best_path, val_accuracy)
+            # Save last checkpoint:
+            last_path = f'./trained_models/{training_timestamp}/last_{epoch}.pt'
+            torch.save(model.state_dict(), last_path)
+            # Remove last checkpoint:
+            if last_model is not None:
+                try:
+                    os.remove(last_model)
+                except:
+                    print("Error Removing second last model")
+            last_model = last_path
 
-            writer.flush()
-            torch.save(model.state_dict(), f'./trained_models/{training_timestamp}/{epoch}.pt')
 
     writer.close()
 
