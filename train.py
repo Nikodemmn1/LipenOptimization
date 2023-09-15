@@ -18,6 +18,9 @@ from rigl_torch.RigL import RigLScheduler
 import socket
 from argparse import ArgumentParser
 from time import perf_counter, strftime
+from torchsummary import summary
+
+
 
 def main(args):
     # Measure time
@@ -40,7 +43,7 @@ def main(args):
     imgs_info_csv_path = args.labels
     model_weights = args.weights
 
-    random_seed = 175801
+    random_seed = args.seed
     random.seed(random_seed)
     torch.manual_seed(random_seed)
     np.random.seed(random_seed)
@@ -87,6 +90,9 @@ def main(args):
     model = SchoolEqModel(num_classes).cuda()
     optimizer = Adam(model.parameters(), lr=learning_rate)
     loss_function = nn.CrossEntropyLoss(reduction='mean')
+
+    # Print model details:
+    summary(model, (1, 224, 224))
 
     # LOAD WEIGHTS
     if model_weights is not None:
@@ -290,7 +296,8 @@ def make_parser():
     parser.add_argument('--class-names', type=str, default="WritingTool, Rubber, MeasurementTool", required=False,
                         choices=["WritingTool, Rubber, MeasurementTool", "Pen, Pencil, Rubber, Ruler, Triangle, None"],
                         help="Names of the classes in the dataset, presented in format A, B, C, ...")
-    parser.add_argument("--test", action="store_true", help="Validate on test dataset")
+    parser.add_argument("--test", action="store_true", help="Validate on test dataset"),
+    parser.add_argument('--seed', type=int, default=175809, help="Seed used to controll randomness", choices=[175801, 175867, 351668])
 
     return parser
 
