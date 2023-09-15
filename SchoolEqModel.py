@@ -7,27 +7,27 @@ class SchoolEqModel(nn.Module):
         self.feature_extractor = nn.Sequential(
             nn.Conv2d(1, 8, 3),
             nn.BatchNorm2d(8),
-            nn.LeakyReLU(),
+            nn.ReLU(),
             nn.MaxPool2d(kernel_size=2),
 
             nn.Conv2d(8, 16, 3),
             nn.BatchNorm2d(16),
-            nn.LeakyReLU(),
+            nn.ReLU(),
             nn.MaxPool2d(kernel_size=2),
 
             nn.Conv2d(16, 32, 5),
             nn.BatchNorm2d(32),
-            nn.LeakyReLU(),
+            nn.ReLU(),
             nn.MaxPool2d(kernel_size=2),
 
             nn.Conv2d(32, 64, 5),
             nn.BatchNorm2d(64),
-            nn.LeakyReLU(),
+            nn.ReLU(),
             nn.MaxPool2d(kernel_size=2),
 
             nn.Conv2d(64, 128, 3),
             nn.BatchNorm2d(128),
-            nn.LeakyReLU(),
+            nn.ReLU(),
             nn.MaxPool2d(kernel_size=2),
 
             nn.Flatten()
@@ -35,6 +35,7 @@ class SchoolEqModel(nn.Module):
 
         self.classification_head = nn.Sequential(
             nn.Linear(2048, 100),
+            nn.ReLU(),
             nn.Linear(100, 6),
             nn.Softmax(dim=-1)
         )

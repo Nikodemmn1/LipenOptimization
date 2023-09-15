@@ -9,11 +9,12 @@ from tqdm import tqdm
 import torch
 import matplotlib.pyplot as plt
 from torch import nn
-from torch.optim import Adam
+from torch.optim import Adam, SGD
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from SchoolEqDataset import SchoolEqDataset
 from SchoolEqModel import SchoolEqModel
+from rigl_torch.RigL import RigLScheduler
 
 
 def main():
@@ -66,8 +67,15 @@ def main():
 
     model = SchoolEqModel().cuda()
     optimizer = Adam(model.parameters(), lr=learning_rate)
+    # optimizer = SGD(model.parameters(), lr=learning_rate)
     writer = SummaryWriter()
     loss_function = nn.CrossEntropyLoss(reduction='mean')
+
+    # RigL
+
+    total_iterations = len(train_dataloader) * max_epochs
+    t_end = int(0.75 * total_iterations)
+    pruner = RigLScheduler(model, optimizer, T_end=t_end, dense_allocation=0.2)
 
     # TRAINING LOOP
 
@@ -93,8 +101,9 @@ def main():
 
             loss = loss_function(y, y_true)
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 30.0)
-            optimizer.step()
+
+            if pruner():
+                optimizer.step()
 
             train_running_loss += loss.item()
             _, y_class = torch.max(y, dim=1)
