@@ -17,8 +17,12 @@ from SchoolEqModel import SchoolEqModel
 from rigl_torch.RigL import RigLScheduler
 import socket
 from argparse import ArgumentParser
+from time import perf_counter, strftime
 
 def main(args):
+    # Measure time
+    start_time = perf_counter()
+
     print("Num GPUs Available: ", torch.cuda.device_count())
 
     # Info for the confusion matrix:
@@ -31,6 +35,7 @@ def main(args):
     batch_size = 256
     val_batch_size = 256
     val_every_n_epochs = 5
+    test_batch_size = 256
     max_epochs = 500
     imgs_info_csv_path = args.labels
     model_weights = args.weights
@@ -50,11 +55,14 @@ def main(args):
 
     imgs_train_paths = glob.glob("./dataset/train/**/*.jpg", recursive=True)
     imgs_val_paths = glob.glob("./dataset/eval/**/*.jpg", recursive=True)
+    imgs_test_paths = glob.glob("./dataset/test/**/*.jpg", recursive=True)
 
     train_dataset = SchoolEqDataset(imgs_train_paths, imgs_info_csv_path)
     val_dataset = SchoolEqDataset(imgs_val_paths, imgs_info_csv_path)
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_dataloader = DataLoader(val_dataset, batch_size=val_batch_size, shuffle=True)
+    test_dataset = SchoolEqDataset(imgs_test_paths, imgs_info_csv_path)
+    test_dataloader = DataLoader(test_dataset, batch_size=test_batch_size, shuffle=False)
 
     # AUGMENTATION IMAGE TRANSFORMS
 
@@ -84,9 +92,12 @@ def main(args):
     if model_weights is not None:
         model_weights = torch.load(model_weights)
         # Remove a head if needed:
-        if model_weights['classification_head.1.weight'].shape[0] != num_classes:
-            del model_weights['classification_head.1.weight']
-            del model_weights['classification_head.1.bias']
+        if model_weights[list(model_weights.keys())[-2]].shape[0] != num_classes:
+            if args.test:
+                print("Error Loaded model has wrong number of classes")
+                return -1
+            del model_weights[list(model_weights.keys())[-1]] # bias
+            del model_weights[list(model_weights.keys())[-1]] # weights
         model.load_state_dict(model_weights,strict=False)
 
     # Model saving variables:
@@ -98,6 +109,15 @@ def main(args):
     total_iterations = len(train_dataloader) * max_epochs
     t_end = int(0.75 * total_iterations)
     pruner = RigLScheduler(model, optimizer, T_end=t_end, dense_allocation=0.2) if use_pruner else None
+
+    # Test Validate:
+    if args.test:
+        validate(model, test_dataloader, loss_function, num_classes, class_names, writer, -1, 'test')
+        # Measure time
+        end_time = datetime.datetime.utcfromtimestamp(perf_counter() - start_time).strftime("%H hours %M minutes %S seconds")
+        print(f"Test concluded without a fuss. It took {end_time}. Have a nice day! 😄")
+        return
+
 
     # TRAINING LOOP
 
@@ -155,43 +175,8 @@ def main(args):
         # VALIDATION PART
 
         if epoch % val_every_n_epochs == 0 or epoch == max_epochs - 1:
-            val_running_loss = 0
-            val_batches = 0
-            val_samples = 0
-            val_correct = 0
 
-            conf_matrix = MulticlassConfusionMatrix(num_classes=num_classes).cuda()
-
-            model.eval()
-            with torch.no_grad():
-                for x, y_true in tqdm(val_dataloader):
-                    x = (x.float() / 255).cuda()
-                    y_true = y_true.cuda()
-                    y = model(x)
-                    loss = loss_function(y, y_true)
-
-                    val_running_loss += loss.item()
-                    _, y_class = torch.max(y, dim=1)
-                    val_correct += (y_class == y_true).sum().item()
-
-                    val_batches += 1
-                    val_samples += len(y_true)
-
-                    conf_matrix.update(y, y_true)
-
-            val_loss = val_running_loss / val_batches
-            val_accuracy = val_correct / val_samples
-
-            conf_matrix_fig, _ = conf_matrix.plot(labels=class_names)
-
-            print(f"Epoch {epoch} - val loss: {val_loss} - val accuracy: {val_accuracy}")
-
-            writer.add_scalar("Loss/val", val_loss, epoch)
-            writer.add_scalar("Accuracy/val", val_accuracy, epoch)
-            writer.add_figure("Confusion Matrix/val", conf_matrix_fig, epoch)
-
-            plt.close(conf_matrix_fig)
-            writer.flush()
+            val_accuracy = validate(model, val_dataloader, loss_function, num_classes, class_names, writer, epoch)
 
             # LAST PART - SAVING MODEL AND EPOCH RESULTS
             # Save a new best checkpoint:
@@ -217,7 +202,56 @@ def main(args):
                     print("Error Removing second last model")
             last_model = last_path
 
+        # Validate on test at the end:
+        if epoch == max_epochs - 1:
+            validate(model, test_dataloader, loss_function, num_classes, class_names, writer, epoch, 'test')
+
     writer.close()
+    # Measure End time
+    end_time = datetime.datetime.utcfromtimestamp(perf_counter() - start_time).strftime("%H hours %M minutes %S seconds")
+    print(f"Training concluded without a fuss. It took {end_time}. Have a nice day! 😄")
+
+
+def validate(model,val_dataloader,loss_function,num_classes,class_names,writer,epoch,mode='val'):
+    val_running_loss = 0
+    val_batches = 0
+    val_samples = 0
+    val_correct = 0
+
+    conf_matrix = MulticlassConfusionMatrix(num_classes=num_classes).cuda()
+
+    model.eval()
+    with torch.no_grad():
+        for x, y_true in tqdm(val_dataloader):
+            x = (x.float() / 255).cuda()
+            y_true = y_true.cuda()
+            y = model(x)
+            loss = loss_function(y, y_true)
+
+            val_running_loss += loss.item()
+            _, y_class = torch.max(y, dim=1)
+            val_correct += (y_class == y_true).sum().item()
+
+            val_batches += 1
+            val_samples += len(y_true)
+
+            conf_matrix.update(y, y_true)
+
+    val_loss = val_running_loss / val_batches
+    val_accuracy = val_correct / val_samples
+
+    conf_matrix_fig, _ = conf_matrix.plot(labels=class_names)
+
+    print(f"Epoch {epoch} - {mode} loss: {val_loss} - {mode} accuracy: {val_accuracy}")
+
+    writer.add_scalar(f"Loss/{mode}", val_loss, epoch)
+    writer.add_scalar(f"Accuracy/{mode}", val_accuracy, epoch)
+    writer.add_figure(f"Confusion Matrix/{mode}", conf_matrix_fig, epoch)
+
+    plt.close(conf_matrix_fig)
+    writer.flush()
+    return val_accuracy
+
 
 
 def create_experiment_name():
@@ -239,10 +273,11 @@ def make_parser():
     parser.add_argument('--save-dir', '-s', type=str, default='trained_models',
                         help='path where to save model after training')
     parser.add_argument("--prune",  action="store_true", help="Enable pruning")
-    parser.add_argument('--num-classes', type=int, default=3, help="Number of classes in the dataset")
+    parser.add_argument('--num-classes', type=int, default=3, help="Number of classes in the dataset",choices=[3,6])
     parser.add_argument('--class-names', type=str, default="WritingTool, Rubber, MeasurementTool", required=False,
                         choices=["WritingTool, Rubber, MeasurementTool", "Pen, Pencil, Rubber, Ruler, Triangle, None"],
                         help="Names of the classes in the dataset, presented in format A, B, C, ...")
+    parser.add_argument("--test", action="store_true", help="Validate on test dataset")
 
     return parser
 
