@@ -99,6 +99,7 @@ def main(args):
             del model_weights[list(model_weights.keys())[-1]] # bias
             del model_weights[list(model_weights.keys())[-1]] # weights
         model.load_state_dict(model_weights,strict=False)
+        print(f"Weights loaded successfully, from: {model_weights}")
 
     # Model saving variables:
     best_model = None
