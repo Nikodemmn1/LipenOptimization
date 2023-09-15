@@ -20,12 +20,18 @@ from rigl_torch.RigL import RigLScheduler
 def main():
     print("Num GPUs Available: ", torch.cuda.device_count())
 
+    # Info for the confusion matrix:
+    num_classes = 3
+    class_names = ["WritingTool","Rubber","MeasurementTool"]
+
+    # HYPERPARAMS:
+
     learning_rate = 3e-4
     batch_size = 256
     val_batch_size = 256
     val_every_n_epochs = 5
-    max_epochs = 5000
-    imgs_info_csv_path = "./dataset/UniformDatasetLabel.csv"
+    max_epochs = 500
+    imgs_info_csv_path = "./dataset/ReducedDatasetLabel.csv"
 
     random_seed = 175801
     random.seed(random_seed)
@@ -65,11 +71,22 @@ def main():
 
     # MODEL, OPTIMIZER, LOSS FUNCTION, ETC.
 
-    model = SchoolEqModel().cuda()
+    model = SchoolEqModel(num_classes).cuda()
     optimizer = Adam(model.parameters(), lr=learning_rate)
-    # optimizer = SGD(model.parameters(), lr=learning_rate)
     writer = SummaryWriter()
     loss_function = nn.CrossEntropyLoss(reduction='mean')
+
+    # LOAD WEIGHTS
+    model_weights = torch.load("trained_models/20230914143659/499.pt")
+    # Remove a head if needed:
+    if model_weights['classification_head.1.weight'].shape[0] != num_classes:
+        del model_weights['classification_head.1.weight']
+        del model_weights['classification_head.1.bias']
+    model.load_state_dict(model_weights,strict=False)
+
+    # Model saving variables:
+    best_model = None
+    last_model = None
 
     # RigL
 
@@ -88,7 +105,7 @@ def main():
         train_samples = 0
         train_correct = 0
 
-        conf_matrix = MulticlassConfusionMatrix(num_classes=6).cuda()
+        conf_matrix = MulticlassConfusionMatrix(num_classes=num_classes).cuda()
 
         model.train(True)
         for x, y_true in tqdm(train_dataloader):
@@ -119,8 +136,7 @@ def main():
 
         print(f"Epoch {epoch} - train loss: {train_loss} - train accuracy: {train_accuracy}")
 
-        conf_matrix_fig, _ = conf_matrix.plot(labels=["pen", "pencil", "rubber",
-                                                      "ruler", "triangle", "none"])
+        conf_matrix_fig, _ = conf_matrix.plot(labels=class_names)
 
         writer.add_scalar("Loss/train", train_loss, epoch)
         writer.add_scalar("Accuracy/train", train_accuracy, epoch)
@@ -130,13 +146,13 @@ def main():
 
         # VALIDATION PART
 
-        if epoch % val_every_n_epochs == 0:
+        if epoch % val_every_n_epochs == 0 or epoch == max_epochs - 1:
             val_running_loss = 0
             val_batches = 0
             val_samples = 0
             val_correct = 0
 
-            conf_matrix = MulticlassConfusionMatrix(num_classes=6).cuda()
+            conf_matrix = MulticlassConfusionMatrix(num_classes=num_classes).cuda()
 
             model.eval()
             with torch.no_grad():
@@ -158,8 +174,7 @@ def main():
             val_loss = val_running_loss / val_batches
             val_accuracy = val_correct / val_samples
 
-            conf_matrix_fig, _ = conf_matrix.plot(labels=["pen", "pencil", "rubber",
-                                                          "ruler", "triangle", "none"])
+            conf_matrix_fig, _ = conf_matrix.plot(labels=class_names)
 
             print(f"Epoch {epoch} - val loss: {val_loss} - val accuracy: {val_accuracy}")
 
@@ -168,11 +183,31 @@ def main():
             writer.add_figure("Confusion Matrix/val", conf_matrix_fig, epoch)
 
             plt.close(conf_matrix_fig)
+            writer.flush()
 
-        # LAST PART - SAVING MODEL AND EPOCH RESULTS
-
-        writer.flush()
-        torch.save(model.state_dict(), f'./trained_models/{training_timestamp}/{epoch}.pt')
+            # LAST PART - SAVING MODEL AND EPOCH RESULTS
+            # Save a new best checkpoint:
+            if best_model is None or best_model[1] < val_accuracy:
+                best_path = f'./trained_models/{training_timestamp}/best_{epoch}.pt'
+                torch.save(model.state_dict(), best_path)
+                # Remove last best checkpoint:
+                if best_model is not None:
+                    try:
+                        os.remove(best_model[0])
+                    except:
+                        print("Error Removing second best model")
+                # Save new best info:
+                best_model = (best_path, val_accuracy)
+            # Save last checkpoint:
+            last_path = f'./trained_models/{training_timestamp}/last_{epoch}.pt'
+            torch.save(model.state_dict(), last_path)
+            # Remove last checkpoint:
+            if last_model is not None:
+                try:
+                    os.remove(last_model)
+                except:
+                    print("Error Removing second last model")
+            last_model = last_path
 
     writer.close()
 
