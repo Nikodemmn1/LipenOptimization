@@ -3,3 +3,4 @@ venv
 runs
 dataset/**/*.jpg
 dataset/UniformDatasetMean.txt
+**/__pycache__/**/*
