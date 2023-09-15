@@ -1,4 +1,6 @@
 trained_models/**/*.pt
+models/*
+checkpoints/*
 venv
 runs
 dataset/**/*.jpg
