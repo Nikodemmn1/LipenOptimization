@@ -90,6 +90,7 @@ def main(args):
 
     # LOAD WEIGHTS
     if model_weights is not None:
+        model_weights_name = model_weights
         model_weights = torch.load(model_weights)
         # Remove a head if needed:
         if model_weights[list(model_weights.keys())[-2]].shape[0] != num_classes:
@@ -99,7 +100,7 @@ def main(args):
             del model_weights[list(model_weights.keys())[-1]] # bias
             del model_weights[list(model_weights.keys())[-1]] # weights
         model.load_state_dict(model_weights,strict=False)
-        print(f"Weights loaded successfully, from: {model_weights}")
+        print(f"Weights loaded successfully, from: {model_weights_name}")
 
     # Model saving variables:
     best_model = None
@@ -118,6 +119,16 @@ def main(args):
         end_time = datetime.datetime.utcfromtimestamp(perf_counter() - start_time).strftime("%H hours %M minutes %S seconds")
         print(f"Test concluded without a fuss. It took {end_time}. Have a nice day! 😄")
         return
+
+    # Freezing:
+    freezing = True
+    if freezing:
+        # Freeze first 2 layers
+        freeze_layers = [layer for layer in model.state_dict()][:14]
+        for f_layer in freeze_layers:
+            print(f"Freezing {f_layer}")
+            model.state_dict()[f_layer].requires_grad = False
+
 
 
     # TRAINING LOOP
@@ -274,6 +285,7 @@ def make_parser():
     parser.add_argument('--save-dir', '-s', type=str, default='trained_models',
                         help='path where to save model after training')
     parser.add_argument("--prune",  action="store_true", help="Enable pruning")
+    parser.add_argument("--freeze", action="store_true", help="Enable first 2 layers freeze")
     parser.add_argument('--num-classes', type=int, default=3, help="Number of classes in the dataset",choices=[3,6])
     parser.add_argument('--class-names', type=str, default="WritingTool, Rubber, MeasurementTool", required=False,
                         choices=["WritingTool, Rubber, MeasurementTool", "Pen, Pencil, Rubber, Ruler, Triangle, None"],
