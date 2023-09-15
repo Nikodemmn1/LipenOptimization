@@ -15,31 +15,36 @@ from torch.utils.tensorboard import SummaryWriter
 from SchoolEqDataset import SchoolEqDataset
 from SchoolEqModel import SchoolEqModel
 from rigl_torch.RigL import RigLScheduler
+import socket
+from argparse import ArgumentParser
 
-
-def main():
+def main(args):
     print("Num GPUs Available: ", torch.cuda.device_count())
 
     # Info for the confusion matrix:
-    num_classes = 3
-    class_names = ["WritingTool","Rubber","MeasurementTool"]
+    num_classes = args.num_classes
+    class_names = args.class_names.split(',')
 
     # HYPERPARAMS:
-
+    use_pruner = args.prune
     learning_rate = 3e-4
     batch_size = 256
     val_batch_size = 256
     val_every_n_epochs = 5
     max_epochs = 500
-    imgs_info_csv_path = "./dataset/ReducedDatasetLabel.csv"
+    imgs_info_csv_path = args.labels
+    model_weights = args.weights
 
     random_seed = 175801
     random.seed(random_seed)
     torch.manual_seed(random_seed)
     np.random.seed(random_seed)
-    
-    training_timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    os.mkdir(f"./trained_models/{training_timestamp}")
+
+    unique_name = create_experiment_name()
+    training_timestamp = f"./{args.run_dir}/{unique_name}"
+    log_name = f"./{args.save_dir}/{unique_name}"
+    os.mkdir(training_timestamp)
+    writer = SummaryWriter(log_dir=log_name)
     
     # DATA LOADING
 
@@ -73,16 +78,16 @@ def main():
 
     model = SchoolEqModel(num_classes).cuda()
     optimizer = Adam(model.parameters(), lr=learning_rate)
-    writer = SummaryWriter()
     loss_function = nn.CrossEntropyLoss(reduction='mean')
 
     # LOAD WEIGHTS
-    model_weights = torch.load("trained_models/20230914143659/499.pt")
-    # Remove a head if needed:
-    if model_weights['classification_head.1.weight'].shape[0] != num_classes:
-        del model_weights['classification_head.1.weight']
-        del model_weights['classification_head.1.bias']
-    model.load_state_dict(model_weights,strict=False)
+    if model_weights is not None:
+        model_weights = torch.load(model_weights)
+        # Remove a head if needed:
+        if model_weights['classification_head.1.weight'].shape[0] != num_classes:
+            del model_weights['classification_head.1.weight']
+            del model_weights['classification_head.1.bias']
+        model.load_state_dict(model_weights,strict=False)
 
     # Model saving variables:
     best_model = None
@@ -92,7 +97,7 @@ def main():
 
     total_iterations = len(train_dataloader) * max_epochs
     t_end = int(0.75 * total_iterations)
-    pruner = RigLScheduler(model, optimizer, T_end=t_end, dense_allocation=0.2)
+    pruner = RigLScheduler(model, optimizer, T_end=t_end, dense_allocation=0.2) if use_pruner else None
 
     # TRAINING LOOP
 
@@ -119,7 +124,10 @@ def main():
             loss = loss_function(y, y_true)
             loss.backward()
 
-            if pruner():
+            if use_pruner:
+                if pruner():
+                    optimizer.step()
+            else:
                 optimizer.step()
 
             train_running_loss += loss.item()
@@ -188,7 +196,7 @@ def main():
             # LAST PART - SAVING MODEL AND EPOCH RESULTS
             # Save a new best checkpoint:
             if best_model is None or best_model[1] < val_accuracy:
-                best_path = f'./trained_models/{training_timestamp}/best_{epoch}.pt'
+                best_path = f'{training_timestamp}/best_{epoch}.pt'
                 torch.save(model.state_dict(), best_path)
                 # Remove last best checkpoint:
                 if best_model is not None:
@@ -199,7 +207,7 @@ def main():
                 # Save new best info:
                 best_model = (best_path, val_accuracy)
             # Save last checkpoint:
-            last_path = f'./trained_models/{training_timestamp}/last_{epoch}.pt'
+            last_path = f'{training_timestamp}/last_{epoch}.pt'
             torch.save(model.state_dict(), last_path)
             # Remove last checkpoint:
             if last_model is not None:
@@ -212,5 +220,34 @@ def main():
     writer.close()
 
 
+def create_experiment_name():
+    # Get the current date and time
+    current_datetime = datetime.datetime.now().strftime("%b%d_%H-%M-%S")
+    # Get the hostname of the computer
+    hostname = socket.gethostname()
+    # Combine the components to create the final string
+    return f"{current_datetime}_{hostname}"
+
+def make_parser():
+    parser = ArgumentParser(description="Arguments for model training")
+    parser.add_argument('--labels', '-l', type=str, default="./dataset/ReducedDatasetLabel.csv",
+                        help='path to labels file .csv')
+    parser.add_argument('--weights', '-w', type=str, required=False,
+                        help='path to pretrained weights .pt')
+    parser.add_argument('--run-dir', '-r', type=str, default='runs',
+                        help='path to tensorboard log dir')
+    parser.add_argument('--save-dir', '-s', type=str, default='trained_models',
+                        help='path where to save model after training')
+    parser.add_argument("--prune",  action="store_true", help="Enable pruning")
+    parser.add_argument('--num-classes', type=int, default=3, help="Number of classes in the dataset")
+    parser.add_argument('--class-names', type=str, default="WritingTool, Rubber, MeasurementTool", required=False,
+                        choices=["WritingTool, Rubber, MeasurementTool", "Pen, Pencil, Rubber, Ruler, Triangle, None"],
+                        help="Names of the classes in the dataset, presented in format A, B, C, ...")
+
+    return parser
+
+
 if __name__ == '__main__':
-    main()
+    parser = make_parser()
+    args = parser.parse_args()
+    main(args)
