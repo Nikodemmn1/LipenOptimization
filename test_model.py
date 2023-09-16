@@ -25,7 +25,7 @@ def main(args):
     class_names = args.class_names.split(',')
 
     # CONFIGURATION VARIABLES
-    training_epochs = 1
+    training_epochs = 10
     test_batch_size = 256
     imgs_info_csv_path = args.labels
     model_weights_path = args.weights

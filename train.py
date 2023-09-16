@@ -336,7 +336,7 @@ def make_parser():
     parser.add_argument("--prune", action="store_true", help="Enable pruning")
     parser.add_argument("--freeze", action="store_true", help="Enable first 2 layers freeze")
     parser.add_argument("--quantization", action="store_true", help="Enable quantization and QAT")
-    parser.add_argument("--weighted_loss", action="store_true", help="Use weighted loss function (needs to change weights in code)")
+    parser.add_argument("--weighted-loss", action="store_true", help="Use weighted loss function (needs to change weights in code)")
     parser.add_argument('--num-classes', type=int, default=3, help="Number of classes in the dataset", choices=[3, 6])
     parser.add_argument('--class-names', type=str, default="WritingTool, Rubber, MeasurementTool", required=False,
                         choices=["WritingTool, Rubber, MeasurementTool", "Pen, Pencil, Rubber, Ruler, Triangle, None"],
