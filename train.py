@@ -247,6 +247,7 @@ def main(args):
                 model.apply(torch.ao.nn.intrinsic.qat.freeze_bn_stats)
 
     writer.close()
+    # Print model details:
     print(pruner)
     # Measure End time
     end_time = datetime.datetime.utcfromtimestamp(perf_counter() - start_time).strftime(
