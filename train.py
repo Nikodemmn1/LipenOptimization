@@ -126,15 +126,9 @@ def main(args):
         print(f"Test concluded without a fuss. It took {end_time}. Have a nice day! 😄")
         return
 
-    # Freezing:
-    freezing = True
-    if freezing:
-        # Freeze first 2 layers
-        freeze_layers = [layer for layer in model.state_dict()][:14]
-        for f_layer in freeze_layers:
-            print(f"Freezing {f_layer}")
-            model.state_dict()[f_layer].requires_grad = False
-
+    # FREEZE
+    if args.freeze:
+        freezing(model,args.freeze,enable=True)
 
 
     # TRAINING LOOP
@@ -271,6 +265,14 @@ def validate(model,val_dataloader,loss_function,num_classes,class_names,writer,e
     writer.flush()
     return val_accuracy
 
+def freezing(model,freezing,enable=True):
+    # Freezing:
+    if freezing:
+        # Freeze first 2 layers
+        freeze_layers = [layer for layer in model.state_dict()][:14]
+        for f_layer in freeze_layers:
+            print(f"Freezing {f_layer}")
+            model.state_dict()[f_layer].requires_grad = not enable
 
 
 def create_experiment_name():
