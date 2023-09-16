@@ -259,6 +259,7 @@ def main(args):
 
 
 def validate(model, val_dataloader, loss_function, num_classes, class_names, writer, epoch, quantization, mode='val'):
+    # Validate model on validation set
     if quantization:
         model_without_quantization = model
         model = torch.ao.quantization.convert(model.eval().cpu(), inplace=False).cpu()
@@ -273,31 +274,34 @@ def validate(model, val_dataloader, loss_function, num_classes, class_names, wri
     model.eval()
     with torch.no_grad():
         for x, y_true in tqdm(val_dataloader):
+            # Prepare input
             if quantization:
                 x = (x.float() / 255).cpu()
                 y_true = y_true.cpu()
             else:
                 x = (x.float() / 255).cuda()
                 y_true = y_true.cuda()
+            # Interfere
             y = model(x)
+            # Calculate Loss
             loss = loss_function(y, y_true)
-
             val_running_loss += loss.item()
+            # Get prediction
             _, y_class = torch.max(y, dim=1)
+            # Sum correct classifications
             val_correct += (y_class == y_true).sum().item()
-
             val_batches += 1
             val_samples += len(y_true)
-
+            # Pass info to the matrix
             conf_matrix.update(y, y_true)
-
+    # Calculate Loss and Accuracy
     val_loss = val_running_loss / val_batches
     val_accuracy = val_correct / val_samples
-
+    # Create matrix
     conf_matrix_fig, _ = conf_matrix.plot(labels=class_names)
-
+    # Print Validation scores
     print(f"Epoch {epoch} - {mode} loss: {val_loss} - {mode} accuracy: {val_accuracy}")
-
+    # Save Info in tensorboard
     writer.add_scalar(f"Loss/{mode}", val_loss, epoch)
     writer.add_scalar(f"Accuracy/{mode}", val_accuracy, epoch)
     writer.add_figure(f"Confusion Matrix/{mode}", conf_matrix_fig, epoch)
