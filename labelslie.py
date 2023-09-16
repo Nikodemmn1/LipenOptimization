@@ -2,8 +2,10 @@ import pandas as pd
 import numpy as np
 
 def main():
+    # Set the manual seed
     np.random.seed(1525)
 
+    # paths to the labels:
     input_labels_path = "dataset/UniformDatasetLabel.csv"
     output_labels_path = "dataset/ReducedDatasetLabel.csv"
 
