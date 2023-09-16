@@ -21,7 +21,6 @@ from time import perf_counter, strftime
 from torchsummary import summary
 
 
-
 def main(args):
     # Measure time
     start_time = perf_counter()
@@ -53,7 +52,7 @@ def main(args):
     log_name = f"./{args.save_dir}/{unique_name}"
     os.mkdir(training_timestamp)
     writer = SummaryWriter(log_dir=log_name)
-    
+
     # DATA LOADING
 
     imgs_train_paths = glob.glob("./dataset/train/**/*.jpg", recursive=True)
@@ -88,7 +87,6 @@ def main(args):
     # MODEL, OPTIMIZER, LOSS FUNCTION, ETC.
 
     model = SchoolEqModel(num_classes).cuda()
-    optimizer = Adam(model.parameters(), lr=learning_rate)
     loss_function = nn.CrossEntropyLoss(reduction='mean')
 
     # Print model details:
@@ -103,39 +101,52 @@ def main(args):
             if args.test:
                 print("Error Loaded model has wrong number of classes")
                 return -1
-            del model_weights[list(model_weights.keys())[-1]] # bias
-            del model_weights[list(model_weights.keys())[-1]] # weights
-        model.load_state_dict(model_weights,strict=False)
+            del model_weights[list(model_weights.keys())[-1]]  # bias
+            del model_weights[list(model_weights.keys())[-1]]  # weights
+        model.load_state_dict(model_weights, strict=False)
         print(f"Weights loaded successfully, from: {model_weights_name}")
 
     # Model saving variables:
     best_model = None
     last_model = None
 
-    # RigL
+    # Freezing:
+    if args.freeze:
+        model_params_tmp = [layer for layer in model.parameters()]
+        optimizer = Adam([
+            {'params': [model_params_tmp[0], model_params_tmp[4]], 'lr': 1e-8},
+            {'params': model_params_tmp[1:4] + model_params_tmp[5:]}
+        ], lr=learning_rate)
+    else:
+        optimizer = Adam(model.parameters(), lr=learning_rate)
 
+    # RigL
     total_iterations = len(train_dataloader) * max_epochs
     t_end = int(0.75 * total_iterations)
     pruner = RigLScheduler(model, optimizer, T_end=t_end, dense_allocation=0.2) if use_pruner else None
 
+    # Quantization
+    if args.quantization:
+        model.eval()
+        torch.ao.quantization.fuse_modules(model, inplace=True, modules_to_fuse=[
+            ["feature_extractor.0", "feature_extractor.1", "feature_extractor.2"],
+            ["feature_extractor.4", "feature_extractor.5", "feature_extractor.6"],
+            ["feature_extractor.8", "feature_extractor.9", "feature_extractor.10"],
+            ["feature_extractor.12", "feature_extractor.13", "feature_extractor.14"],
+            ["feature_extractor.16", "feature_extractor.17", "feature_extractor.18"]
+        ])
+        model.train()
+        model.qconfig = torch.ao.quantization.get_default_qat_qconfig('x86')
+        torch.ao.quantization.prepare_qat(model, inplace=True)
+
     # Test Validate:
     if args.test:
-        validate(model, test_dataloader, loss_function, num_classes, class_names, writer, -1, 'test')
+        validate(model, test_dataloader, loss_function, num_classes, class_names, writer, -1, args.quantization, 'test')
         # Measure time
-        end_time = datetime.datetime.utcfromtimestamp(perf_counter() - start_time).strftime("%H hours %M minutes %S seconds")
+        end_time = datetime.datetime.utcfromtimestamp(perf_counter() - start_time).strftime(
+            "%H hours %M minutes %S seconds")
         print(f"Test concluded without a fuss. It took {end_time}. Have a nice day! 😄")
         return
-
-    # Freezing:
-    freezing = True
-    if freezing:
-        # Freeze first 2 layers
-        freeze_layers = [layer for layer in model.state_dict()][:14]
-        for f_layer in freeze_layers:
-            print(f"Freezing {f_layer}")
-            model.state_dict()[f_layer].requires_grad = False
-
-
 
     # TRAINING LOOP
 
@@ -194,7 +205,8 @@ def main(args):
 
         if epoch % val_every_n_epochs == 0 or epoch == max_epochs - 1:
 
-            val_accuracy = validate(model, val_dataloader, loss_function, num_classes, class_names, writer, epoch)
+            val_accuracy = validate(model, val_dataloader, loss_function, num_classes, class_names, writer, epoch,
+                                    args.quantization)
 
             # LAST PART - SAVING MODEL AND EPOCH RESULTS
             # Save a new best checkpoint:
@@ -222,28 +234,46 @@ def main(args):
 
         # Validate on test at the end:
         if epoch == max_epochs - 1:
-            validate(model, test_dataloader, loss_function, num_classes, class_names, writer, epoch, 'test')
+            validate(model, test_dataloader, loss_function, num_classes, class_names, writer, epoch, args.quantization,
+                     'test')
+
+        # Quantization
+        if args.quantization:
+            if epoch > 0.375 * max_epochs:
+                model.apply(torch.ao.quantization.disable_observer)
+
+            if epoch > 0.25 * max_epochs:
+                model.apply(torch.ao.nn.intrinsic.qat.freeze_bn_stats)
 
     writer.close()
     print(pruner)
     # Measure End time
-    end_time = datetime.datetime.utcfromtimestamp(perf_counter() - start_time).strftime("%H hours %M minutes %S seconds")
+    end_time = datetime.datetime.utcfromtimestamp(perf_counter() - start_time).strftime(
+        "%H hours %M minutes %S seconds")
     print(f"Training concluded without a fuss. It took {end_time}. Have a nice day! 😄")
 
 
-def validate(model,val_dataloader,loss_function,num_classes,class_names,writer,epoch,mode='val'):
+def validate(model, val_dataloader, loss_function, num_classes, class_names, writer, epoch, quantization, mode='val'):
+    if quantization:
+        model_without_quantization = model
+        model = torch.ao.quantization.convert(model.eval().cpu(), inplace=False).cpu()
+        conf_matrix = MulticlassConfusionMatrix(num_classes=num_classes).cpu()
+    else:
+        conf_matrix = MulticlassConfusionMatrix(num_classes=num_classes).cuda()
     val_running_loss = 0
     val_batches = 0
     val_samples = 0
     val_correct = 0
 
-    conf_matrix = MulticlassConfusionMatrix(num_classes=num_classes).cuda()
-
     model.eval()
     with torch.no_grad():
         for x, y_true in tqdm(val_dataloader):
-            x = (x.float() / 255).cuda()
-            y_true = y_true.cuda()
+            if quantization:
+                x = (x.float() / 255).cpu()
+                y_true = y_true.cpu()
+            else:
+                x = (x.float() / 255).cuda()
+                y_true = y_true.cuda()
             y = model(x)
             loss = loss_function(y, y_true)
 
@@ -269,8 +299,11 @@ def validate(model,val_dataloader,loss_function,num_classes,class_names,writer,e
 
     plt.close(conf_matrix_fig)
     writer.flush()
-    return val_accuracy
 
+    if quantization:
+        model = model_without_quantization.cuda()
+
+    return val_accuracy
 
 
 def create_experiment_name():
@@ -280,6 +313,7 @@ def create_experiment_name():
     hostname = socket.gethostname()
     # Combine the components to create the final string
     return f"{current_datetime}_{hostname}"
+
 
 def make_parser():
     parser = ArgumentParser(description="Arguments for model training")
@@ -291,14 +325,16 @@ def make_parser():
                         help='path to tensorboard log dir')
     parser.add_argument('--save-dir', '-s', type=str, default='trained_models',
                         help='path where to save model after training')
-    parser.add_argument("--prune",  action="store_true", help="Enable pruning")
+    parser.add_argument("--prune", action="store_true", help="Enable pruning")
     parser.add_argument("--freeze", action="store_true", help="Enable first 2 layers freeze")
-    parser.add_argument('--num-classes', type=int, default=3, help="Number of classes in the dataset",choices=[3,6])
+    parser.add_argument("--quantization", action="store_true", help="Enable quantization and QAT")
+    parser.add_argument('--num-classes', type=int, default=3, help="Number of classes in the dataset", choices=[3, 6])
     parser.add_argument('--class-names', type=str, default="WritingTool, Rubber, MeasurementTool", required=False,
                         choices=["WritingTool, Rubber, MeasurementTool", "Pen, Pencil, Rubber, Ruler, Triangle, None"],
                         help="Names of the classes in the dataset, presented in format A, B, C, ...")
     parser.add_argument("--test", action="store_true", help="Validate on test dataset"),
-    parser.add_argument('--seed', type=int, default=175809, help="Seed used to controll randomness", choices=[175801, 175867, 351668])
+    parser.add_argument('--seed', type=int, default=175809, help="Seed used to controll randomness",
+                        choices=[175801, 175867, 351668])
 
     return parser
 
