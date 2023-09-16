@@ -40,7 +40,7 @@ def main(args):
     test_batch_size = 256
     max_epochs = 500
     imgs_info_csv_path = args.labels
-    model_weights = args.weights
+    model_weights_path = args.weights
 
     random_seed = args.seed
     random.seed(random_seed)
@@ -61,9 +61,9 @@ def main(args):
 
     train_dataset = SchoolEqDataset(imgs_train_paths, imgs_info_csv_path)
     val_dataset = SchoolEqDataset(imgs_val_paths, imgs_info_csv_path)
+    test_dataset = SchoolEqDataset(imgs_test_paths, imgs_info_csv_path)
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_dataloader = DataLoader(val_dataset, batch_size=val_batch_size, shuffle=True)
-    test_dataset = SchoolEqDataset(imgs_test_paths, imgs_info_csv_path)
     test_dataloader = DataLoader(test_dataset, batch_size=test_batch_size, shuffle=False)
 
     # AUGMENTATION IMAGE TRANSFORMS
@@ -89,13 +89,9 @@ def main(args):
     model = SchoolEqModel(num_classes).cuda()
     loss_function = nn.CrossEntropyLoss(reduction='mean')
 
-    # Print model details:
-    summary(model, (1, 224, 224))
-
     # LOAD WEIGHTS
-    if model_weights is not None:
-        model_weights_name = model_weights
-        model_weights = torch.load(model_weights)
+    if model_weights_path is not None:
+        model_weights = torch.load(model_weights_path)
         # Remove a head if needed:
         if model_weights[list(model_weights.keys())[-2]].shape[0] != num_classes:
             if args.test:
@@ -104,7 +100,10 @@ def main(args):
             del model_weights[list(model_weights.keys())[-1]]  # bias
             del model_weights[list(model_weights.keys())[-1]]  # weights
         model.load_state_dict(model_weights, strict=False)
-        print(f"Weights loaded successfully, from: {model_weights_name}")
+        print(f"Weights loaded successfully, from: {model_weights_path}")
+
+    # Print model details:
+    summary(model, (1, 224, 224))
 
     # Model saving variables:
     best_model = None
