@@ -117,6 +117,7 @@ def main(args):
             {'params': [model_params_tmp[0], model_params_tmp[4]], 'lr': 1e-8},
             {'params': model_params_tmp[1:4] + model_params_tmp[5:]}
         ], lr=learning_rate)
+        print("First two layers have smaller learning rate: 1e-8" )
     else:
         optimizer = Adam(model.parameters(), lr=learning_rate)
 
