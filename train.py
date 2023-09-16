@@ -87,7 +87,10 @@ def main(args):
     # MODEL, OPTIMIZER, LOSS FUNCTION, ETC.
 
     model = SchoolEqModel(num_classes).cuda()
-    loss_function = nn.CrossEntropyLoss(reduction='mean')
+    if args.weighted_loss:
+        loss_function = nn.CrossEntropyLoss(weight=torch.tensor([1.0,2.0,1.0]).cuda(),  reduction='mean')
+    else:
+        loss_function = nn.CrossEntropyLoss(reduction='mean')
 
     # Print model details:
     summary(model, (1, 224, 224))
@@ -330,6 +333,7 @@ def make_parser():
     parser.add_argument("--prune", action="store_true", help="Enable pruning")
     parser.add_argument("--freeze", action="store_true", help="Enable first 2 layers freeze")
     parser.add_argument("--quantization", action="store_true", help="Enable quantization and QAT")
+    parser.add_argument("--weighted_loss", action="store_true", help="Use weighted loss function (needs to change weights in code)")
     parser.add_argument('--num-classes', type=int, default=3, help="Number of classes in the dataset", choices=[3, 6])
     parser.add_argument('--class-names', type=str, default="WritingTool, Rubber, MeasurementTool", required=False,
                         choices=["WritingTool, Rubber, MeasurementTool", "Pen, Pencil, Rubber, Ruler, Triangle, None"],
