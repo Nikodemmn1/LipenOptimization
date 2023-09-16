@@ -88,7 +88,7 @@ def main(args):
 
     model = SchoolEqModel(num_classes).cuda()
     if args.weighted_loss:
-        loss_function = nn.CrossEntropyLoss(weight=torch.tensor([1.0,2.0,1.0]).cuda(),  reduction='mean')
+        loss_function = nn.CrossEntropyLoss(weight=torch.tensor([1.0, 2.0, 1.0]).cuda(),  reduction='mean')
     else:
         loss_function = nn.CrossEntropyLoss(reduction='mean')
 
@@ -260,6 +260,7 @@ def main(args):
 def validate(model, val_dataloader, loss_function, num_classes, class_names, writer, epoch, quantization, mode='val'):
     # Validate model on validation set
     if quantization:
+        loss_function = nn.CrossEntropyLoss(weight=torch.tensor([1.0, 2.0, 1.0]),  reduction='mean')
         model_without_quantization = model
         model = torch.ao.quantization.convert(model.eval().cpu(), inplace=False).cpu()
         conf_matrix = MulticlassConfusionMatrix(num_classes=num_classes).cpu()
