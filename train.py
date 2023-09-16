@@ -225,6 +225,7 @@ def main(args):
             validate(model, test_dataloader, loss_function, num_classes, class_names, writer, epoch, 'test')
 
     writer.close()
+    print(pruner)
     # Measure End time
     end_time = datetime.datetime.utcfromtimestamp(perf_counter() - start_time).strftime("%H hours %M minutes %S seconds")
     print(f"Training concluded without a fuss. It took {end_time}. Have a nice day! 😄")
