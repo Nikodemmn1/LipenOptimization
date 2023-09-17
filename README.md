@@ -1,7 +1,7 @@
 # LipenOptimization
  This is the code for the LipenOptimisation" Project. It is an extention of the LipenProject  <a href="https://github.com/theATM/LipenProject"> (avaiable here)</a>.
 
- Main goa is to optimize the model using prining and quantisation.
+ Main goal is to optimize the model using prining and quantisation.
 
 
 ## Trening 
