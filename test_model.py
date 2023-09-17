@@ -45,7 +45,7 @@ def main(args):
     if model_weights_path is not None:
         model_weights = torch.load(model_weights_path)
         # Remove a head if needed:
-        if model_weights[list(model_weights.keys())[-2]].shape[0] != num_classes:
+        if not args.quantization and model_weights[list(model_weights.keys())[-2]].shape[0] != num_classes:
             if args.test:
                 print("Error Loaded model has wrong number of classes")
                 return -1
