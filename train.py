@@ -126,7 +126,7 @@ def main(args):
     # RigL
     total_iterations = len(train_dataloader) * max_epochs
     t_end = int(0.75 * total_iterations)
-    pruner = RigLScheduler(model, optimizer, T_end=t_end, dense_allocation=0.2) if use_pruner else None
+    pruner = RigLScheduler(model, optimizer, T_end=t_end, dense_allocation=args.non_zero_params, ignore_linear_layers=False) if use_pruner else None
 
     # Quantization
     if args.quantization:
@@ -221,7 +221,7 @@ def main(args):
                     try:
                         os.remove(best_model[0])
                     except:
-                        print("Error Removing second best model")
+                        print("Error while Removing second best model")
                 # Save new best info:
                 best_model = (best_path, val_accuracy)
             # Save last checkpoint:
@@ -232,7 +232,7 @@ def main(args):
                 try:
                     os.remove(last_model)
                 except:
-                    print("Error Removing second last model")
+                    print("Error while Removing second last model")
             last_model = last_path
 
         # Validate on test at the end:
@@ -339,6 +339,7 @@ def make_parser():
     parser.add_argument("--quantization", action="store_true", help="Enable quantization and QAT")
     parser.add_argument("--weighted-loss", action="store_true", help="Use weighted loss function (needs to change weights in code)")
     parser.add_argument('--num-classes', type=int, default=3, help="Number of classes in the dataset", choices=[3, 6])
+    parser.add_argument('--non-zero-params', type=float, default=0.2, help="Number of Non Zero Pruning Params")
     parser.add_argument('--class-names', type=str, default="WritingTool, Rubber, MeasurementTool", required=False,
                         choices=["WritingTool, Rubber, MeasurementTool", "Pen, Pencil, Rubber, Ruler, Triangle, None"],
                         help="Names of the classes in the dataset, presented in format A, B, C, ...")
