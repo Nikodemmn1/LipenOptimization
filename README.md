@@ -71,6 +71,23 @@ train.py args:
 Test is done using the test_model_py script, using the "weights" arg to laod the model.
 
 
+## Pruning and Quantization Results
+
+Small CNN model have been optimised without large loss in the Accuracy as seen in the table below.
+
+
+| Optimized Model | Result | Comparison |
+|-|-|-|
+| Interference Time on CPU|          164,.7 ms|  75.7% reduction| 
+| One Epoch Training Time on GPU  |  0.1 s |     16,7% reduction|	  
+| One Epoch Training Time on CPU |   1.68 s |    3% reduction|
+| Non-Zero Parameters            |   68869  |    19.9% of all parameters|
+| Model Size                     |   0.36 MB	|   74% reduction in size|
+| Validation Accurac             |   56,22%	 |  1,6% decrease|
+| Test Accuracy	                 |   51,89%	|   3,5% decrease|
+
+
+
 ## Additional Info
 
 Project Documentation (in Polish):
